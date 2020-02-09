@@ -100,7 +100,7 @@ pipeline {
        External Release Tagging
        ######################### */
     // If this is a custom json endpoint parse the return to get external tag
-    stage("Set ENV custom_json"){
+    stage("Set ENV GITHUB_TAGNAME"){
      steps{
        script{
          env.EXT_RELEASE_TAGNAME = sh(
@@ -114,7 +114,7 @@ pipeline {
        External Release Name
        ######################## */
     // If this is a custom json endpoint parse the return to get external tag
-    stage("Set ENV custom_json"){
+    stage("Set ENV GITHUB_NAME"){
      steps{
        script{
          env.EXT_RELEASE_NAME = sh(
@@ -125,7 +125,7 @@ pipeline {
      }
     }
     // Sanitize the release tagname and strip illegal docker or github characters
-    stage("Sanitize tagname"){
+    stage("Sanitize GITHUB_TAGNAME"){
       steps{
         script{
           env.EXT_RELEASE_TAGNAME_CLEAN = sh(
@@ -135,7 +135,7 @@ pipeline {
       }
     }
     // Sanitize the release name and strip illegal docker or github characters
-    stage("Sanitize name "){
+    stage("Sanitize GITHUB_NAME"){
       steps{
         script{
           env.EXT_RELEASE_NAME_CLEAN = sh(
