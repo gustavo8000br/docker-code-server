@@ -15,7 +15,8 @@ pipeline {
     BUILDS_DISCORD=credentials('build_webhook_url')
     GITHUB_TOKEN=credentials('498b4638-2d04-4ce5-832d-8a57d01d97ac')
     JSON_URL = 'https://api.github.com/repos/cdr/code-server/releases'
-    JSON_PATH = 'first(.[] | select(.prerelease == true)) | .tag_name'
+    JSON_GITHUB_TAGNAME_PATH = 'first(.[] | select(.prerelease == true)) | .tag_name'
+    JSON_GITHUB_NAME_PATH = 'first(.[] | select(.prerelease == true)) | .name'
     CONTAINER_NAME = 'code-server'
     BUILD_VERSION_ARG = 'CODE_RELEASE'
     LS_USER = 'gustavo8000br'
@@ -95,26 +96,50 @@ pipeline {
         }
       }
     }
-    /* ########################
+    /* #########################
        External Release Tagging
-       ######################## */
+       ######################### */
     // If this is a custom json endpoint parse the return to get external tag
     stage("Set ENV custom_json"){
      steps{
        script{
-         env.EXT_RELEASE = sh(
-           script: '''curl -s ${JSON_URL} | jq -r ". | ${JSON_PATH}" ''',
+         env.EXT_RELEASE_TAGNAME = sh(
+           script: '''curl -s ${JSON_URL} | jq -r ". | ${JSON_GITHUB_TAGNAME_PATH}" ''',
            returnStdout: true).trim()
          env.RELEASE_LINK = env.JSON_URL
        }
      }
     }
-    // Sanitize the release tag and strip illegal docker or github characters
-    stage("Sanitize tag"){
+    /* ########################
+       External Release Name
+       ######################## */
+    // If this is a custom json endpoint parse the return to get external tag
+    stage("Set ENV custom_json"){
+     steps{
+       script{
+         env.EXT_RELEASE_NAME = sh(
+           script: '''curl -s ${JSON_URL} | jq -r ". | ${JSON_GITHUB_NAME_PATH}" ''',
+           returnStdout: true).trim()
+         env.RELEASE_LINK = env.JSON_URL
+       }
+     }
+    }
+    // Sanitize the release tagname and strip illegal docker or github characters
+    stage("Sanitize tagname"){
       steps{
         script{
-          env.EXT_RELEASE_CLEAN = sh(
-            script: '''echo ${EXT_RELEASE} | sed 's/[~,%@+;:/]//g' ''',
+          env.EXT_RELEASE_TAGNAME_CLEAN = sh(
+            script: '''echo ${EXT_RELEASE_TAGNAME} | sed 's/[~,%@+;:/]//g' ''',
+            returnStdout: true).trim()
+        }
+      }
+    }
+    // Sanitize the release name and strip illegal docker or github characters
+    stage("Sanitize name "){
+      steps{
+        script{
+          env.EXT_RELEASE_NAME_CLEAN = sh(
+            script: '''echo ${EXT_RELEASE_NAME} | sed 's/[~,%@+;:/]//g' ''',
             returnStdout: true).trim()
         }
       }
@@ -130,11 +155,11 @@ pipeline {
           env.IMAGE = env.DOCKERHUB_IMAGE
           env.GITHUBIMAGE = 'docker.pkg.github.com/' + env.LS_USER + '/' + env.LS_REPO + '/' + env.CONTAINER_NAME
           if (env.MULTIARCH == 'true') {
-            env.CI_TAGS = 'amd64-' + env.EXT_RELEASE_CLEAN + '-ls' + env.LS_TAG_NUMBER + '|arm64v8-' + env.EXT_RELEASE_CLEAN + '-ls' + env.LS_TAG_NUMBER
+            env.CI_TAGS = 'amd64-' + env.EXT_RELEASE_TAGNAME_CLEAN + '-ls' + env.LS_TAG_NUMBER + '|arm64v8-' + env.EXT_RELEASE_CLEAN + '-ls' + env.LS_TAG_NUMBER
           } else {
-            env.CI_TAGS = env.EXT_RELEASE_CLEAN + '-ls' + env.LS_TAG_NUMBER
+            env.CI_TAGS = env.EXT_RELEASE_TAGNAME_CLEAN + '-ls' + env.LS_TAG_NUMBER
           }
-          env.META_TAG = env.EXT_RELEASE_CLEAN + '-ls' + env.LS_TAG_NUMBER
+          env.META_TAG = env.EXT_RELEASE_TAGNAME_CLEAN + '-ls' + env.LS_TAG_NUMBER
         }
       }
     }
@@ -149,11 +174,11 @@ pipeline {
           env.IMAGE = env.DEV_DOCKERHUB_IMAGE
           env.GITHUBIMAGE = 'docker.pkg.github.com/' + env.LS_USER + '/' + env.LS_REPO + '/gustavo8000br-' + env.CONTAINER_NAME
           if (env.MULTIARCH == 'true') {
-            env.CI_TAGS = 'amd64-' + env.EXT_RELEASE_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-dev-' + env.COMMIT_SHA + '|arm64v8-' + env.EXT_RELEASE_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-dev-' + env.COMMIT_SHA
+            env.CI_TAGS = 'amd64-' + env.EXT_RELEASE_TAGNAME_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-dev-' + env.COMMIT_SHA + '|arm64v8-' + env.EXT_RELEASE_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-dev-' + env.COMMIT_SHA
           } else {
-            env.CI_TAGS = env.EXT_RELEASE_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-dev-' + env.COMMIT_SHA
+            env.CI_TAGS = env.EXT_RELEASE_TAGNAME_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-dev-' + env.COMMIT_SHA
           }
-          env.META_TAG = env.EXT_RELEASE_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-dev-' + env.COMMIT_SHA
+          env.META_TAG = env.EXT_RELEASE_TAGNAME_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-dev-' + env.COMMIT_SHA
           env.DOCKERHUB_LINK = 'https://hub.docker.com/r/' + env.DEV_DOCKERHUB_IMAGE + '/tags/'
         }
       }
@@ -168,11 +193,11 @@ pipeline {
           env.IMAGE = env.PR_DOCKERHUB_IMAGE
           env.GITHUBIMAGE = 'docker.pkg.github.com/' + env.LS_USER + '/' + env.LS_REPO + '/gustavo8000br-' + env.CONTAINER_NAME
           if (env.MULTIARCH == 'true') {
-            env.CI_TAGS = 'amd64-' + env.EXT_RELEASE_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-pr-' + env.PULL_REQUEST + '|arm64v8-' + env.EXT_RELEASE_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-pr-' + env.PULL_REQUEST
+            env.CI_TAGS = 'amd64-' + env.EXT_RELEASE_TAGNAME_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-pr-' + env.PULL_REQUEST + '|arm64v8-' + env.EXT_RELEASE_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-pr-' + env.PULL_REQUEST
           } else {
-            env.CI_TAGS = env.EXT_RELEASE_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-pr-' + env.PULL_REQUEST
+            env.CI_TAGS = env.EXT_RELEASE_TAGNAME_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-pr-' + env.PULL_REQUEST
           }
-          env.META_TAG = env.EXT_RELEASE_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-pr-' + env.PULL_REQUEST
+          env.META_TAG = env.EXT_RELEASE_TAGNAME_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-pr-' + env.PULL_REQUEST
           env.CODE_URL = 'https://github.com/' + env.LS_USER + '/' + env.LS_REPO + '/pull/' + env.PULL_REQUEST
           env.DOCKERHUB_LINK = 'https://hub.docker.com/r/' + env.PR_DOCKERHUB_IMAGE + '/tags/'
         }
@@ -285,7 +310,7 @@ pipeline {
       }
       steps {
         sh "docker build --no-cache --pull -t ${IMAGE}:${META_TAG} \
-        --build-arg ${BUILD_VERSION_ARG}=${EXT_RELEASE} --build-arg VERSION=\"${META_TAG}\" --build-arg BUILD_DATE=${GITHUB_DATE} ."
+        --build-arg ${BUILD_VERSION_ARG}=${EXT_RELEASE_TAGNAME} --build-arg VERSION=\"${META_TAG}\" --build-arg GITHUB_TAGNAME=${EXT_RELEASE_TAGNAME} --build-arg GITHUB_NAME=${EXT_RELEASE_NAME} --build-arg BUILD_DATE=${GITHUB_DATE} ."
       }
     }
     // Build MultiArch Docker containers for push to LS Repo
@@ -298,7 +323,7 @@ pipeline {
         stage('Build X86') {
           steps {
             sh "docker build --no-cache --pull -t ${IMAGE}:amd64-${META_TAG} \
-            --build-arg ${BUILD_VERSION_ARG}=${EXT_RELEASE} --build-arg VERSION=\"${META_TAG}\" --build-arg BUILD_DATE=${GITHUB_DATE} ."
+            --build-arg ${BUILD_VERSION_ARG}=${EXT_RELEASE_TAGNAME} --build-arg VERSION=\"${META_TAG}\" --build-arg GITHUB_TAGNAME=${EXT_RELEASE_TAGNAME} --build-arg GITHUB_NAME=${EXT_RELEASE_NAME} --build-arg BUILD_DATE=${GITHUB_DATE} ."
           }
         }
         stage('Build ARM64') {
@@ -319,7 +344,7 @@ pipeline {
                  echo $DOCKERPASS | docker login -u $DOCKERUSER --password-stdin
                  '''
               sh "docker build --no-cache --pull -f Dockerfile.aarch64 -t ${IMAGE}:arm64v8-${META_TAG} \
-                           --build-arg ${BUILD_VERSION_ARG}=${EXT_RELEASE} --build-arg VERSION=\"${META_TAG}\" --build-arg BUILD_DATE=${GITHUB_DATE} ."
+                           --build-arg ${BUILD_VERSION_ARG}=${EXT_RELEASE_TAGNAME} --build-arg VERSION=\"${META_TAG}\" --build-arg GITHUB_TAGNAME=${EXT_RELEASE_TAGNAME} --build-arg GITHUB_NAME=${EXT_RELEASE_NAME} --build-arg BUILD_DATE=${GITHUB_DATE} ."
               sh "docker tag ${IMAGE}:arm64v8-${META_TAG} lsiodev/buildcache:arm64v8-${COMMIT_SHA}-${BUILD_NUMBER}"
               sh "docker push lsiodev/buildcache:arm64v8-${COMMIT_SHA}-${BUILD_NUMBER}"
               sh '''docker rmi \
@@ -568,25 +593,25 @@ pipeline {
       when {
         branch "development"
         expression {
-          env.LS_RELEASE != env.EXT_RELEASE_CLEAN + '-ls' + env.LS_TAG_NUMBER
+          env.LS_RELEASE != env.EXT_RELEASE_TAGNAME_CLEAN + '-ls' + env.LS_TAG_NUMBER
         }
         environment name: 'CHANGE_ID', value: ''
         environment name: 'EXIT_STATUS', value: ''
       }
       steps {
-        echo "Pushing New tag for current commit ${EXT_RELEASE_CLEAN}-ls${LS_TAG_NUMBER}"
+        echo "Pushing New tag for current commit ${EXT_RELEASE_TAGNAME_CLEAN}-ls${LS_TAG_NUMBER}"
         sh '''curl -H "Authorization: token ${GITHUB_TOKEN}" -X POST https://api.github.com/repos/${LS_USER}/${LS_REPO}/git/tags \
-        -d '{"tag":"'${EXT_RELEASE_CLEAN}'-ls'${LS_TAG_NUMBER}'",\
+        -d '{"tag":"'${EXT_RELEASE_TAGNAME_CLEAN}'-ls'${LS_TAG_NUMBER}'",\
              "object": "'${COMMIT_SHA}'",\
-             "message": "Tagging Release '${EXT_RELEASE_CLEAN}'-ls'${LS_TAG_NUMBER}' to development",\
+             "message": "Tagging Release '${EXT_RELEASE_TAGNAME_CLEAN}'-ls'${LS_TAG_NUMBER}' to development",\
              "type": "commit",\
              "tagger": {"name": "Guustavo8000br Jenkins","email": "gustavo.mathias.rocha@gmail.com","date": "'${GITHUB_DATE}'"}}' '''
         echo "Pushing New release for Tag"
         sh '''#! /bin/bash
               echo "Data change at JSON endpoint ${JSON_URL}" > releasebody.json
-              echo '{"tag_name":"'${EXT_RELEASE_CLEAN}'-ls'${LS_TAG_NUMBER}'",\
+              echo '{"tag_name":"'${EXT_RELEASE_TAGNAME_CLEAN}'-ls'${LS_TAG_NUMBER}'",\
                      "target_commitish": "development",\
-                     "name": "'${EXT_RELEASE_CLEAN}'-ls'${LS_TAG_NUMBER}'",\
+                     "name": "'${EXT_RELEASE_TAGNAME_CLEAN}'-ls'${LS_TAG_NUMBER}'",\
                      "body": "**Gustavo8000br Changes:**\\n\\n'${LS_RELEASE_NOTES}'\\n**Remote Changes:**\\n\\n' > start
               printf '","draft": false,"prerelease": true}' >> releasebody.json
               paste -d'\\0' start releasebody.json > releasebody.json.done
