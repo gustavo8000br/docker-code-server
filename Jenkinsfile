@@ -151,7 +151,7 @@ pipeline {
     // If this is a dev build use dev docker endpoints
     stage("Set ENV dev build"){
       when {
-        not {branch "development"}
+        branch "development"
         environment name: 'CHANGE_ID', value: ''
       }
       steps {
