@@ -1,12 +1,10 @@
 FROM lsiobase/ubuntu:arm64v8-bionic
-FROM lsiobase/ubuntu:arm64v8-bionic
 
 # set version label
 ARG BUILD_DATE
 ARG VERSION
-ARG GITHUB_TAGNAME
-ARG GITHUB_NAME
-LABEL build_version="Linuxserver.io version:- ${VERSION} Build-date:- ${BUILD_DATE}"
+ARG CODE_RELEASE
+LABEL build_version="OverStack.Codes version:- ${VERSION} Build-date:- ${BUILD_DATE}"
 LABEL maintainer="gustavo8000br"
 
 # environment settings
@@ -21,20 +19,15 @@ RUN \
 	net-tools \
 	sudo && \
  echo "**** install code-server ****" && \
- if [ -z ${GITHUB_TAGNAME+x} ]; then \
-	GITHUB_TAGNAME=$(curl -sX GET "https://api.github.com/repos/cdr/code-server/releases" \
-	| jq -r 'first(.[] | select(.prerelease == false)) | .tag_name'); \
+ if [ -z ${CODE_RELEASE+x} ]; then \
+	CODE_RELEASE=$(curl -sX GET "https://api.github.com/repos/cdr/code-server/releases/latest" \
+	| awk '/tag_name/{print $4;exit}' FS='[""]'); \
  fi && \
- if [ -z ${GITHUB_NAME+x} ]; then \
-	GITHUB_TAGNAME=$(curl -sX GET "https://api.github.com/repos/cdr/code-server/releases" \
-	| jq -r 'first(.[] | select(.prerelease == false)) | .name'); \
- fi && \
- CODE_URL=$(curl -sX GET "https://api.github.com/repos/cdr/code-server/releases/tags/${GITHUB_TAGNAME}" \
+ CODE_URL=$(curl -sX GET "https://api.github.com/repos/cdr/code-server/releases/tags/${CODE_RELEASE}" \
 	| jq -r '.assets[] | select(.browser_download_url | contains("linux-arm64")) | .browser_download_url') && \
  curl -o \
 	/tmp/code.tar.gz -L \
 	"${CODE_URL}" && \
-	echo "\nDownloaded: ${CODE_URL}" && \
  tar xzf /tmp/code.tar.gz -C \
 	/usr/bin/ --strip-components=1 \
 	--wildcards code-server*/code-server && \
