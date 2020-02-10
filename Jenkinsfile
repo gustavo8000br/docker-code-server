@@ -26,14 +26,6 @@ pipeline {
     PR_DOCKERHUB_IMAGE = 'gustavo8000br/code-server-pr'
     DIST_IMAGE = 'ubuntu'
     MULTIARCH='true'
-    CI='false'
-    CI_WEB='true'
-    CI_PORT='8443'
-    CI_SSL='false'
-    CI_DELAY='120'
-    CI_DOCKERENV='TZ=US/Pacific'
-    CI_AUTH='user:password'
-    CI_WEBPATH=''
   }
   stages {
     // Setup all the basic environment variables needed for the build
@@ -203,35 +195,6 @@ pipeline {
         }
       }
     }
-    // Run ShellCheck
-    stage('ShellCheck') {
-      when {
-        environment name: 'CI', value: 'true'
-      }
-      steps {
-        withCredentials([
-          string(credentialsId: 'spaces-key', variable: 'DO_KEY'),
-          string(credentialsId: 'spaces-secret', variable: 'DO_SECRET')
-        ]) {
-          script{
-            env.SHELLCHECK_URL = 'https://lsio-ci.ams3.digitaloceanspaces.com/' + env.IMAGE + '/' + env.META_TAG + '/shellcheck-result.xml'
-          }
-          sh '''curl -sL https://raw.githubusercontent.com/linuxserver/docker-shellcheck/master/checkrun.sh | /bin/bash'''
-          sh '''#! /bin/bash
-                set -e
-                docker pull lsiodev/spaces-file-upload:latest
-                docker run --rm \
-                -e DESTINATION=\"${IMAGE}/${META_TAG}/shellcheck-result.xml\" \
-                -e FILE_NAME="shellcheck-result.xml" \
-                -e MIMETYPE="text/xml" \
-                -v ${WORKSPACE}:/mnt \
-                -e SECRET_KEY=\"${DO_SECRET}\" \
-                -e ACCESS_KEY=\"${DO_KEY}\" \
-                -t lsiodev/spaces-file-upload:latest \
-                python /upload.py'''
-        }
-      }
-    }
     // Use helper containers to render templated files
     stage('Update-Templates') {
       when {
@@ -345,11 +308,6 @@ pipeline {
                  '''
               sh "docker build --no-cache --pull -f Dockerfile.aarch64 -t ${IMAGE}:arm64v8-${META_TAG} \
                            --build-arg ${BUILD_VERSION_ARG}=${EXT_RELEASE_TAGNAME} --build-arg VERSION=\"${META_TAG}\" --build-arg GITHUB_TAGNAME=${EXT_RELEASE_TAGNAME} --build-arg GITHUB_NAME=${EXT_RELEASE_NAME} --build-arg BUILD_DATE=${GITHUB_DATE} ."
-              sh "docker tag ${IMAGE}:arm64v8-${META_TAG} lsiodev/buildcache:arm64v8-${COMMIT_SHA}-${BUILD_NUMBER}"
-              sh "docker push lsiodev/buildcache:arm64v8-${COMMIT_SHA}-${BUILD_NUMBER}"
-              sh '''docker rmi \
-                    ${IMAGE}:arm64v8-${META_TAG} \
-                    lsiodev/buildcache:arm64v8-${COMMIT_SHA}-${BUILD_NUMBER} || :'''
             }
           }
         }
@@ -438,53 +396,6 @@ pipeline {
         }
       }
     }
-    /* #######
-       Testing
-       ####### */
-    // Run Container tests
-    stage('Test') {
-      when {
-        environment name: 'CI', value: 'true'
-        environment name: 'EXIT_STATUS', value: ''
-      }
-      steps {
-        withCredentials([
-          string(credentialsId: 'spaces-key', variable: 'DO_KEY'),
-          string(credentialsId: 'spaces-secret', variable: 'DO_SECRET')
-        ]) {
-          script{
-            env.CI_URL = 'https://lsio-ci.ams3.digitaloceanspaces.com/' + env.IMAGE + '/' + env.META_TAG + '/index.html'
-          }
-          sh '''#! /bin/bash
-                set -e
-                docker pull lsiodev/ci:latest
-                if [ "${MULTIARCH}" == "true" ]; then
-                  docker pull lsiodev/buildcache:arm64v8-${COMMIT_SHA}-${BUILD_NUMBER}
-                  docker tag lsiodev/buildcache:arm64v8-${COMMIT_SHA}-${BUILD_NUMBER} ${IMAGE}:arm64v8-${META_TAG}
-                fi
-                docker run --rm \
-                --shm-size=1gb \
-                -v /var/run/docker.sock:/var/run/docker.sock \
-                -e IMAGE=\"${IMAGE}\" \
-                -e DELAY_START=\"${CI_DELAY}\" \
-                -e TAGS=\"${CI_TAGS}\" \
-                -e META_TAG=\"${META_TAG}\" \
-                -e PORT=\"${CI_PORT}\" \
-                -e SSL=\"${CI_SSL}\" \
-                -e BASE=\"${DIST_IMAGE}\" \
-                -e SECRET_KEY=\"${DO_SECRET}\" \
-                -e ACCESS_KEY=\"${DO_KEY}\" \
-                -e DOCKER_ENV=\"${CI_DOCKERENV}\" \
-                -e WEB_SCREENSHOT=\"${CI_WEB}\" \
-                -e WEB_AUTH=\"${CI_AUTH}\" \
-                -e WEB_PATH=\"${CI_WEBPATH}\" \
-                -e DO_REGION="ams3" \
-                -e DO_BUCKET="lsio-ci" \
-                -t lsiodev/ci:latest \
-                python /ci/ci.py'''
-        }
-      }
-    }
     /* ##################
          Release Logic
        ################## */
@@ -516,7 +427,7 @@ pipeline {
                 for DELETEIMAGE in "${GITHUBIMAGE}" "${IMAGE}"; do
                   docker rmi \
                   ${DELETEIMAGE}:${META_TAG} \
-                  ${DELETEIMAGE}:development || :
+                  ${DELETEIMAGE}:development
                 done
              '''
         }
@@ -541,10 +452,6 @@ pipeline {
                 set -e
                 echo $DOCKERPASS | docker login -u $DOCKERUSER --password-stdin
                 echo $GITHUB_TOKEN | docker login docker.pkg.github.com -u gustavo8000br --password-stdin
-                if [ "${CI}" == "false" ]; then
-                  docker pull lsiodev/buildcache:arm64v8-${COMMIT_SHA}-${BUILD_NUMBER}
-                  docker tag lsiodev/buildcache:arm64v8-${COMMIT_SHA}-${BUILD_NUMBER} ${IMAGE}:arm64v8-${META_TAG}
-                fi
                 for MANIFESTIMAGE in "${IMAGE}" "${GITHUBIMAGE}"; do
                   docker tag ${IMAGE}:amd64-${META_TAG} ${MANIFESTIMAGE}:amd64-${META_TAG}
                   docker tag ${IMAGE}:arm64v8-${META_TAG} ${MANIFESTIMAGE}:arm64v8-${META_TAG}
@@ -580,10 +487,8 @@ pipeline {
                   ${DELETEIMAGE}:amd64-${META_TAG} \
                   ${DELETEIMAGE}:amd64-development \
                   ${DELETEIMAGE}:arm64v8-${META_TAG} \
-                  ${DELETEIMAGE}:arm64v8-development || :
+                  ${DELETEIMAGE}:arm64v8-development
                 done
-                docker rmi \
-                lsiodev/buildcache:arm64v8-${COMMIT_SHA}-${BUILD_NUMBER} || :
              '''
         }
       }
@@ -616,33 +521,6 @@ pipeline {
               printf '","draft": false,"prerelease": true}' >> releasebody.json
               paste -d'\\0' start releasebody.json > releasebody.json.done
               curl -H "Authorization: token ${GITHUB_TOKEN}" -X POST https://api.github.com/repos/${LS_USER}/${LS_REPO}/releases -d @releasebody.json.done'''
-      }
-    }
-    // Use helper container to sync the current README on master to the dockerhub endpoint
-    stage('Sync-README') {
-      when {
-        environment name: 'CHANGE_ID', value: ''
-        environment name: 'EXIT_STATUS', value: ''
-      }
-      steps {
-        withCredentials([
-          [
-            $class: 'UsernamePasswordMultiBinding',
-            credentialsId: '3f9ba4d5-100d-45b0-a3c4-633fd6061207',
-            usernameVariable: 'DOCKERUSER',
-            passwordVariable: 'DOCKERPASS'
-          ]
-        ]) {
-          sh '''#! /bin/bash
-                docker pull lsiodev/readme-sync
-                docker run --rm=true \
-                  -e DOCKERHUB_USERNAME=$DOCKERUSER \
-                  -e DOCKERHUB_PASSWORD=$DOCKERPASS \
-                  -e GIT_REPOSITORY=${LS_USER}/${LS_REPO} \
-                  -e DOCKER_REPOSITORY=${IMAGE} \
-                  -e GIT_BRANCH=master \
-                  lsiodev/readme-sync bash -c 'node sync' '''
-        }
       }
     }
     // If this is a Pull request send the CI link as a comment on it
