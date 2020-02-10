@@ -7,7 +7,7 @@ FROM armhf/hello-world
 LABEL build_version="OverStack.Codes version:- ${VERSION} Build-date:- ${BUILD_DATE}"
 LABEL maintainer="gustavo8000br"
 
-RUN echo "Only for functional builds for armhf"
+RUN echo Only for functional builds for armhf
 
 # environment settings
 # ENV HOME="/config"
