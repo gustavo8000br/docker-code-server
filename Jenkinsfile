@@ -15,8 +15,11 @@ pipeline {
     BUILDS_DISCORD=credentials('build_webhook_url')
     GITHUB_TOKEN=credentials('498b4638-2d04-4ce5-832d-8a57d01d97ac')
     JSON_URL = 'https://api.github.com/repos/cdr/code-server/releases'
-    JSON_GITHUB_TAGNAME_PATH = 'first(.[] | select(.prerelease == true)) | .tag_name'
-    JSON_GITHUB_NAME_PATH = 'first(.[] | select(.prerelease == true)) | .name'
+    JSON_GITHUB_TAGNAME_PATH = 'first(.[] | select(.prerelease == false)) | .tag_name'
+    JSON_GITHUB_NAME_PATH = 'first(.[] | select(.prerelease == false)) | .name'
+    EXT_GIT_BRANCH = 'master'
+    EXT_USER = 'cdr'
+    EXT_REPO = 'code-server'
     CONTAINER_NAME = 'code-server'
     LS_USER = 'gustavo8000br'
     LS_REPO = 'docker-code-server'
@@ -344,6 +347,12 @@ pipeline {
             credentialsId: '3f9ba4d5-100d-45b0-a3c4-633fd6061207',
             usernameVariable: 'DOCKERUSER',
             passwordVariable: 'DOCKERPASS'
+          ],
+          [
+            $class: 'UsernamePasswordMultiBinding',
+            credentialsId: 'Quay.io-Robot',
+            usernameVariable: 'QUAYUSER',
+            passwordVariable: 'QUAYPASS'
           ]
         ]) {
           sh '''#! /bin/bash
@@ -378,6 +387,12 @@ pipeline {
             credentialsId: '3f9ba4d5-100d-45b0-a3c4-633fd6061207',
             usernameVariable: 'DOCKERUSER',
             passwordVariable: 'DOCKERPASS'
+          ],
+          [
+            $class: 'UsernamePasswordMultiBinding',
+            credentialsId: 'Quay.io-Robot',
+            usernameVariable: 'QUAYUSER',
+            passwordVariable: 'QUAYPASS'
           ]
         ]) {
           sh '''#! /bin/bash
@@ -479,12 +494,12 @@ pipeline {
         }
         else if (currentBuild.currentResult == "SUCCESS"){
           sh ''' curl -X POST -H "Content-Type: application/json" --data '{"avatar_url": "https://wiki.jenkins-ci.org/download/attachments/2916393/headshot.png","embeds": [{"color": 1681177,\
-                  "description": "**Build:**  '${BUILD_NUMBER}'\\n**CI Results:**  '${CI_URL}'\\n**ShellCheck Results:**  '${SHELLCHECK_URL}'\\n**Status:**  Success\\n**Job:** '${RUN_DISPLAY_URL}'\\n**Change:** '${CODE_URL}'\\n**External Release:**: '${RELEASE_LINK}'\\n**DockerHub:** '${DOCKERHUB_LINK}'\\n"}],\
+                  "description": "**Build:**  '${BUILD_NUMBER}'\\n**Status:**  Success\\n**Job:** '${RUN_DISPLAY_URL}'\\n**Change:** '${CODE_URL}'\\n**External Release:**: '${RELEASE_LINK}'\\n**DockerHub:** '${DOCKERHUB_LINK}'\\n"}],\
                   "username": "Jenkins"}' ${BUILDS_DISCORD} '''
         }
         else {
           sh ''' curl -X POST -H "Content-Type: application/json" --data '{"avatar_url": "https://wiki.jenkins-ci.org/download/attachments/2916393/headshot.png","embeds": [{"color": 16711680,\
-                  "description": "**Build:**  '${BUILD_NUMBER}'\\n**CI Results:**  '${CI_URL}'\\n**ShellCheck Results:**  '${SHELLCHECK_URL}'\\n**Status:**  failure\\n**Job:** '${RUN_DISPLAY_URL}'\\n**Change:** '${CODE_URL}'\\n**External Release:**: '${RELEASE_LINK}'\\n**DockerHub:** '${DOCKERHUB_LINK}'\\n"}],\
+                  "description": "**Build:**  '${BUILD_NUMBER}'\\n**Status:**  failure\\n**Job:** '${RUN_DISPLAY_URL}'\\n**Change:** '${CODE_URL}'\\n**External Release:**: '${RELEASE_LINK}'\\n**DockerHub:** '${DOCKERHUB_LINK}'\\n"}],\
                   "username": "Jenkins"}' ${BUILDS_DISCORD} '''
         }
       }

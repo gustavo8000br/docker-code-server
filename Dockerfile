@@ -28,10 +28,11 @@ RUN \
 	GITHUB_TAGNAME=$(curl -sX GET "https://api.github.com/repos/cdr/code-server/releases" \
 	| jq -r 'first(.[] | select(.prerelease == false)) | .name'); \
  fi && \
+ CODE_URL=$(curl -sX GET "https://api.github.com/repos/cdr/code-server/releases/tags/${CODE_RELEASE}" \
+	| jq -r '.assets[] | select(.browser_download_url | contains("linux-x86_64")) | .browser_download_url') && \
  curl -o \
- /tmp/code.tar.gz -L \
-	"https://github.com/cdr/code-server/releases/download/${GITHUB_TAGNAME}/code-server${GITHUB_NAME}-linux-x86_64.tar.gz" && \
- echo "Downloaded: https://github.com/cdr/code-server/releases/download/${GITHUB_TAGNAME}/code-server${GITHUB_NAME}-linux-x86_64.tar.gz"  && \
+	/tmp/code.tar.gz -L \
+	"${CODE_URL}" && \
  tar xzf /tmp/code.tar.gz -C \
 	/usr/bin/ --strip-components=1 \
 	--wildcards code-server*/code-server && \

@@ -44,7 +44,7 @@ Find us at:
 - All intensive computation runs on your server.
 - You're no longer running excess instances of Chrome.
 
-[![code-server](https://github.com/cdr/code-server/raw/master/doc/assets/cli.png)](https://coder.com)
+[![code-server](https://github.com/cdr/code-server/raw/master/doc/assets/ide.gif)](https://coder.com)
 
 ## Supported Architectures
 
@@ -58,6 +58,11 @@ The architectures supported by this image are:
 | :----: | --- |
 | x86-64 | amd64-latest |
 | aarch64 | arm64v8-latest |
+
+## Version Tags
+
+This image provides various versions that are available via tags. `latest` tag usually provides the latest stable version. Others are considered under development and caution must be exercised when using them.
+
 
 ## Version Tags
 
@@ -230,6 +235,10 @@ Once registered you can define the dockerfile to use with `-f Dockerfile.aarch64
 
 ## Versions
 
+* **17.01.20:** - Fix artifact url retrieval from github.
+* **24.10.19:** - Upgrade to v2 builds.
+* **28.09.19:** - Update project logo.
+* **21.09.19:** - Add development builds/tag.
 * **09.07.19:** - Add optional sudo access.
 * **01.07.19:** - Add nano.
 * **24.06.19:** - Initial Release.
