@@ -17,9 +17,6 @@ pipeline {
     JSON_URL = 'https://api.github.com/repos/cdr/code-server/releases'
     JSON_GITHUB_TAGNAME_PATH = 'first(.[] | select(.prerelease == false)) | .tag_name'
     JSON_GITHUB_NAME_PATH = 'first(.[] | select(.prerelease == false)) | .name'
-    EXT_GIT_BRANCH = 'master'
-    EXT_USER = 'cdr'
-    EXT_REPO = 'code-server'
     CONTAINER_NAME = 'code-server'
     LS_USER = 'gustavo8000br'
     LS_REPO = 'docker-code-server'
@@ -27,7 +24,7 @@ pipeline {
     DEV_DOCKERHUB_IMAGE = 'gustavo8000br/code-server-dev'
     PR_DOCKERHUB_IMAGE = 'gustavo8000br/code-server-pr'
     DIST_IMAGE = 'ubuntu'
-    MULTIARCH='false'
+    MULTIARCH='true'
   }
   stages {
     // Setup all the basic environment variables needed for the build
@@ -347,12 +344,6 @@ pipeline {
             credentialsId: '3f9ba4d5-100d-45b0-a3c4-633fd6061207',
             usernameVariable: 'DOCKERUSER',
             passwordVariable: 'DOCKERPASS'
-          ],
-          [
-            $class: 'UsernamePasswordMultiBinding',
-            credentialsId: 'Quay.io-Robot',
-            usernameVariable: 'QUAYUSER',
-            passwordVariable: 'QUAYPASS'
           ]
         ]) {
           sh '''#! /bin/bash
