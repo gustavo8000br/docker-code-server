@@ -299,7 +299,7 @@ pipeline {
                  '''
               sh "docker build --no-cache --pull -f Dockerfile.armhf -t ${IMAGE}:arm32v7-${META_TAG} \
                            --build-arg ${BUILD_VERSION_ARG}=${EXT_RELEASE} --build-arg VERSION=\"${META_TAG}\" --build-arg BUILD_DATE=${GITHUB_DATE} ."
-              sh "docker tag ${IMAGE}:arm32v7-${META_TAG} lsiodev/buildcache:arm32v7-${COMMIT_SHA}-${BUILD_NUMBER}"
+              sh "docker tag ${IMAGE}:arm32v7-${META_TAG} gustavo8000br/buildcache:arm32v7-${COMMIT_SHA}-${BUILD_NUMBER}"
               sh "docker push gustavo8000br/buildcache:arm32v7-${COMMIT_SHA}-${BUILD_NUMBER}"
               sh '''docker rmi \
                     ${IMAGE}:arm32v7-${META_TAG} \
@@ -327,7 +327,7 @@ pipeline {
               sh "docker build --no-cache --pull -f Dockerfile.aarch64 -t ${IMAGE}:arm64v8-${META_TAG} \
                            --build-arg ${BUILD_VERSION_ARG}=${EXT_RELEASE} --build-arg VERSION=\"${META_TAG}\" --build-arg BUILD_DATE=${GITHUB_DATE} ."
               sh "docker tag ${IMAGE}:arm64v8-${META_TAG} gustavo8000br/buildcache:arm64v8-${COMMIT_SHA}-${BUILD_NUMBER}"
-              sh "docker push lsiodev/buildcache:arm64v8-${COMMIT_SHA}-${BUILD_NUMBER}"
+              sh "docker push gustavo8000br/buildcache:arm64v8-${COMMIT_SHA}-${BUILD_NUMBER}"
               sh '''docker rmi \
                     ${IMAGE}:arm64v8-${META_TAG} \
                     gustavo8000br/buildcache:arm64v8-${COMMIT_SHA}-${BUILD_NUMBER} || :'''
