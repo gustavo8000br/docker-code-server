@@ -1,4 +1,4 @@
-FROM hello-world
+FROM armhf/hello-world/
 
 # set version label
 # ARG BUILD_DATE
