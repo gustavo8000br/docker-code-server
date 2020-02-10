@@ -2,10 +2,6 @@ pipeline {
   agent {
     label 'X86-64-MULTI'
   }
-  options {
-    buildDiscarder(logRotator(numToKeepStr: '10', daysToKeepStr: '60'))
-    parallelsAlwaysFailFast()
-  }
   // Input to determine if this is a package check
   parameters {
       string(defaultValue: 'false', description: 'package check run', name: 'PACKAGE_CHECK')
@@ -33,7 +29,7 @@ pipeline {
         script{
           env.EXIT_STATUS = ''
           env.LS_RELEASE = sh(
-            script: '''docker run --rm alexeiled/skopeo sh -c 'skopeo inspect docker://docker.io/'${DOCKERHUB_IMAGE}':development 2>/dev/null' | jq -r '.Labels.build_version' | awk '{print $3}' | grep '\\-ls' || : ''',
+            script: '''docker run --rm alexeiled/skopeo sh -c 'skopeo inspect docker://docker.io/'${DOCKERHUB_IMAGE}':latest 2>/dev/null' | jq -r '.Labels.build_version' | awk '{print $3}' | grep '\\-ls' || : ''',
             returnStdout: true).trim()
           env.LS_RELEASE_NOTES = sh(
             script: '''cat readme-vars.yml | awk -F \\" '/date: "[0-9][0-9].[0-9][0-9].[0-9][0-9]:/ {print $4;exit;}' | sed -E ':a;N;$!ba;s/\\r{0,1}\\n/\\\\n/g' ''',
@@ -135,21 +131,16 @@ pipeline {
         }
       }
     }
-    // If this is a development build use live docker endpoints
+    // If this is a master build use live docker endpoints
     stage("Set ENV live build"){
       when {
-        branch "development"
+        branch "master"
         environment name: 'CHANGE_ID', value: ''
       }
       steps {
         script{
           env.IMAGE = env.DOCKERHUB_IMAGE
           env.GITHUBIMAGE = 'docker.pkg.github.com/' + env.LS_USER + '/' + env.LS_REPO + '/' + env.CONTAINER_NAME
-          if (env.MULTIARCH == 'true') {
-            env.CI_TAGS = 'amd64-' + env.EXT_RELEASE_TAGNAME_CLEAN + '-ls' + env.LS_TAG_NUMBER + '|arm64v8-' + env.EXT_RELEASE_CLEAN + '-ls' + env.LS_TAG_NUMBER
-          } else {
-            env.CI_TAGS = env.EXT_RELEASE_TAGNAME_CLEAN + '-ls' + env.LS_TAG_NUMBER
-          }
           env.META_TAG = env.EXT_RELEASE_TAGNAME_CLEAN + '-ls' + env.LS_TAG_NUMBER
         }
       }
@@ -157,18 +148,13 @@ pipeline {
     // If this is a dev build use dev docker endpoints
     stage("Set ENV dev build"){
       when {
-        not {branch "development"}
+        not {branch "master"}
         environment name: 'CHANGE_ID', value: ''
       }
       steps {
         script{
           env.IMAGE = env.DEV_DOCKERHUB_IMAGE
           env.GITHUBIMAGE = 'docker.pkg.github.com/' + env.LS_USER + '/' + env.LS_REPO + '/gustavo8000br-' + env.CONTAINER_NAME
-          if (env.MULTIARCH == 'true') {
-            env.CI_TAGS = 'amd64-' + env.EXT_RELEASE_TAGNAME_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-dev-' + env.COMMIT_SHA + '|arm64v8-' + env.EXT_RELEASE_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-dev-' + env.COMMIT_SHA
-          } else {
-            env.CI_TAGS = env.EXT_RELEASE_TAGNAME_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-dev-' + env.COMMIT_SHA
-          }
           env.META_TAG = env.EXT_RELEASE_TAGNAME_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-dev-' + env.COMMIT_SHA
           env.DOCKERHUB_LINK = 'https://hub.docker.com/r/' + env.DEV_DOCKERHUB_IMAGE + '/tags/'
         }
@@ -183,11 +169,6 @@ pipeline {
         script{
           env.IMAGE = env.PR_DOCKERHUB_IMAGE
           env.GITHUBIMAGE = 'docker.pkg.github.com/' + env.LS_USER + '/' + env.LS_REPO + '/gustavo8000br-' + env.CONTAINER_NAME
-          if (env.MULTIARCH == 'true') {
-            env.CI_TAGS = 'amd64-' + env.EXT_RELEASE_TAGNAME_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-pr-' + env.PULL_REQUEST + '|arm64v8-' + env.EXT_RELEASE_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-pr-' + env.PULL_REQUEST
-          } else {
-            env.CI_TAGS = env.EXT_RELEASE_TAGNAME_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-pr-' + env.PULL_REQUEST
-          }
           env.META_TAG = env.EXT_RELEASE_TAGNAME_CLEAN + '-pkg-' + env.PACKAGE_TAG + '-pr-' + env.PULL_REQUEST
           env.CODE_URL = 'https://github.com/' + env.LS_USER + '/' + env.LS_REPO + '/pull/' + env.PULL_REQUEST
           env.DOCKERHUB_LINK = 'https://hub.docker.com/r/' + env.PR_DOCKERHUB_IMAGE + '/tags/'
@@ -248,7 +229,7 @@ pipeline {
     // Take the image we just built and dump package versions for comparison
     stage('Update-packages') {
       when {
-        branch "development"
+        branch "master"
         environment name: 'CHANGE_ID', value: ''
         environment name: 'EXIT_STATUS', value: ''
       }
@@ -276,7 +257,7 @@ pipeline {
               echo "Package tag sha from current packages in buit container is ${NEW_PACKAGE_TAG} comparing to old ${PACKAGE_TAG} from github"
               if [ "${NEW_PACKAGE_TAG}" != "${PACKAGE_TAG}" ]; then
                 git clone https://github.com/${LS_USER}/${LS_REPO}.git ${TEMPDIR}/${LS_REPO}
-                git --git-dir ${TEMPDIR}/${LS_REPO}/.git checkout -f development
+                git --git-dir ${TEMPDIR}/${LS_REPO}/.git checkout -f master
                 cp ${TEMPDIR}/package_versions.txt ${TEMPDIR}/${LS_REPO}/
                 cd ${TEMPDIR}/${LS_REPO}/
                 wait
@@ -300,7 +281,7 @@ pipeline {
     // Exit the build if the package file was just updated
     stage('PACKAGE-exit') {
       when {
-        branch "development"
+        branch "master"
         environment name: 'CHANGE_ID', value: ''
         environment name: 'PACKAGE_UPDATED', value: 'true'
         environment name: 'EXIT_STATUS', value: ''
@@ -314,7 +295,7 @@ pipeline {
     // Exit the build if this is just a package check and there are no changes to push
     stage('PACKAGECHECK-exit') {
       when {
-        branch "development"
+        branch "master"
         environment name: 'CHANGE_ID', value: ''
         environment name: 'PACKAGE_UPDATED', value: 'false'
         environment name: 'EXIT_STATUS', value: ''
@@ -434,7 +415,7 @@ pipeline {
     // If this is a public release tag it in the LS Github
     stage('Github-Tag-Push-Release') {
       when {
-        branch "development"
+        branch "master"
         expression {
           env.LS_RELEASE != env.EXT_RELEASE_TAGNAME_CLEAN + '-ls' + env.LS_TAG_NUMBER
         }
@@ -446,14 +427,14 @@ pipeline {
         sh '''curl -H "Authorization: token ${GITHUB_TOKEN}" -X POST https://api.github.com/repos/${LS_USER}/${LS_REPO}/git/tags \
         -d '{"tag":"'${EXT_RELEASE_TAGNAME_CLEAN}'-ls'${LS_TAG_NUMBER}'",\
               "object": "'${COMMIT_SHA}'",\
-              "message": "Tagging Release '${EXT_RELEASE_TAGNAME_CLEAN}'-ls'${LS_TAG_NUMBER}' to development",\
+              "message": "Tagging Release '${EXT_RELEASE_TAGNAME_CLEAN}'-ls'${LS_TAG_NUMBER}' to master",\
               "type": "commit",\
               "tagger": {"name": "Gustavo8000br Jenkins","email": "gustavo.mathias.rocha@gmail.com","date": "'${GITHUB_DATE}'"}}' '''
         echo "Pushing New release for Tag"
         sh '''#! /bin/bash
               echo "Data change at JSON endpoint ${JSON_URL}" > releasebody.json
               echo '{"tag_name":"'${EXT_RELEASE_TAGNAME_CLEAN}'-ls'${LS_TAG_NUMBER}'",\
-                      "target_commitish": "development",\
+                      "target_commitish": "master",\
                       "name": "'${EXT_RELEASE_TAGNAME_CLEAN}'-ls'${LS_TAG_NUMBER}'",\
                       "body": "**Gustavo8000br Changes:**\\n\\n'${LS_RELEASE_NOTES}'\\n**Remote Changes:**\\n\\n' > start
               printf '","draft": false,"prerelease": true}' >> releasebody.json
@@ -461,19 +442,6 @@ pipeline {
               curl -H "Authorization: token ${GITHUB_TOKEN}" -X POST https://api.github.com/repos/${LS_USER}/${LS_REPO}/releases -d @releasebody.json.done'''
       }
     }
-    // If this is a Pull request send the CI link as a comment on it
-    stage('Pull Request Comment') {
-      when {
-        not {environment name: 'CHANGE_ID', value: ''}
-        environment name: 'CI', value: 'true'
-        environment name: 'EXIT_STATUS', value: ''
-      }
-      steps {
-        sh '''curl -H "Authorization: token ${GITHUB_TOKEN}" -X POST https://api.github.com/repos/${LS_USER}/${LS_REPO}/issues/${PULL_REQUEST}/comments \
-        -d '{"body": "I am a bot, here are the test results for this PR: \\n'${CI_URL}' \\n'${SHELLCHECK_URL}'"}' '''
-      }
-    }
-  }
   /* ######################
     Send status to Discord
      ###################### */

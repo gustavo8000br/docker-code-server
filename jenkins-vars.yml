@@ -2,27 +2,19 @@
 
 # jenkins variables
 project_name: docker-code-server
-external_type: custom_json
-release_type: prerelease
-release_tag: development
-ls_branch: development
+external_type: github_stable
+release_type: stable
+release_tag: latest
+ls_branch: master
 repo_vars:
   - JSON_URL = 'https://api.github.com/repos/cdr/code-server/releases'
-  - JSON_PATH = 'first(.[] | select(.prerelease == true)) | .tag_name'
+  - JSON_GITHUB_TAGNAME_PATH = 'first(.[] | select(.prerelease == false)) | .tag_name'
+  - JSON_GITHUB_NAME_PATH = 'first(.[] | select(.prerelease == false)) | .name'
   - CONTAINER_NAME = 'code-server'
-  - BUILD_VERSION_ARG = 'CODE_RELEASE'
   - LS_USER = 'gustavo8000br'
   - LS_REPO = 'docker-code-server'
-  - DOCKERHUB_IMAGE = 'gustavo8000br/docker-code-server'
-  - DEV_DOCKERHUB_IMAGE = 'gustavo8000br/docker-code-server-dev'
-  - PR_DOCKERHUB_IMAGE = 'gustavo8000br/docker-code-server-pr'
+  - DOCKERHUB_IMAGE = 'gustavo8000br/code-server'
+  - DEV_DOCKERHUB_IMAGE = 'gustavo8000br/code-server-dev'
+  - PR_DOCKERHUB_IMAGE = 'gustavo8000br/code-server-pr'
   - DIST_IMAGE = 'ubuntu'
   - MULTIARCH='true'
-  - CI='false'
-  - CI_WEB='true'
-  - CI_PORT='8443'
-  - CI_SSL='false'
-  - CI_DELAY='120'
-  - CI_DOCKERENV='TZ=US/Pacific'
-  - CI_AUTH='user:password'
-  - CI_WEBPATH=''
