@@ -446,6 +446,7 @@ pipeline {
               curl -H "Authorization: token ${GITHUB_TOKEN}" -X POST https://api.github.com/repos/${LS_USER}/${LS_REPO}/releases -d @releasebody.json.done'''
       }
     }
+  }
   /* ######################
     Send status to Discord
      ###################### */
@@ -471,5 +472,4 @@ pipeline {
       cleanWs()
     }
   }
-}
 }
