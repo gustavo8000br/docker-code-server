@@ -8,24 +8,23 @@ pipeline {
   }
   // Input to determine if this is a package check
   parameters {
-     string(defaultValue: 'false', description: 'package check run', name: 'PACKAGE_CHECK')
+      string(defaultValue: 'false', description: 'package check run', name: 'PACKAGE_CHECK')
   }
   // Configuration for the variables used for this specific repo
   environment {
     BUILDS_DISCORD=credentials('build_webhook_url')
     GITHUB_TOKEN=credentials('498b4638-2d04-4ce5-832d-8a57d01d97ac')
     JSON_URL = 'https://api.github.com/repos/cdr/code-server/releases'
-    JSON_GITHUB_TAGNAME_PATH = 'first(.[] | select(.prerelease == false)) | .tag_name'
-    JSON_GITHUB_NAME_PATH = 'first(.[] | select(.prerelease == false)) | .name'
+    JSON_GITHUB_TAGNAME_PATH = 'first(.[] | select(.prerelease == true)) | .tag_name'
+    JSON_GITHUB_NAME_PATH = 'first(.[] | select(.prerelease == true)) | .name'
     CONTAINER_NAME = 'code-server'
-    BUILD_VERSION_ARG = 'CODE_RELEASE'
     LS_USER = 'gustavo8000br'
     LS_REPO = 'docker-code-server'
     DOCKERHUB_IMAGE = 'gustavo8000br/code-server'
     DEV_DOCKERHUB_IMAGE = 'gustavo8000br/code-server-dev'
     PR_DOCKERHUB_IMAGE = 'gustavo8000br/code-server-pr'
     DIST_IMAGE = 'ubuntu'
-    MULTIARCH='true'
+    MULTIARCH='false'
   }
   stages {
     // Setup all the basic environment variables needed for the build
@@ -58,20 +57,20 @@ pipeline {
         script{
           env.LS_TAG_NUMBER = sh(
             script: '''#! /bin/bash
-                       tagsha=$(git rev-list -n 1 ${LS_RELEASE} 2>/dev/null)
-                       if [ "${tagsha}" == "${COMMIT_SHA}" ]; then
-                         echo ${LS_RELEASE_NUMBER}
-                       elif [ -z "${GIT_COMMIT}" ]; then
-                         echo ${LS_RELEASE_NUMBER}
-                       else
-                         echo $((${LS_RELEASE_NUMBER} + 1))
-                       fi''',
+                        tagsha=$(git rev-list -n 1 ${LS_RELEASE} 2>/dev/null)
+                        if [ "${tagsha}" == "${COMMIT_SHA}" ]; then
+                          echo ${LS_RELEASE_NUMBER}
+                        elif [ -z "${GIT_COMMIT}" ]; then
+                          echo ${LS_RELEASE_NUMBER}
+                        else
+                          echo $((${LS_RELEASE_NUMBER} + 1))
+                        fi''',
             returnStdout: true).trim()
         }
       }
     }
     /* #######################
-       Package Version Tagging
+      Package Version Tagging
        ####################### */
     // Grab the current package versions in Git to determine package tag
     stage("Set Package tag"){
@@ -79,42 +78,42 @@ pipeline {
         script{
           env.PACKAGE_TAG = sh(
             script: '''#!/bin/bash
-                       if [ -e package_versions.txt ] ; then
-                         cat package_versions.txt | md5 | cut -c1-8
-                       else
-                         echo none
-                       fi''',
+                        if [ -e package_versions.txt ] ; then
+                          cat package_versions.txt | md5 | cut -c1-8
+                        else
+                          echo none
+                        fi''',
             returnStdout: true).trim()
         }
       }
     }
     /* #########################
-       External Release Tagging
+      External Release Tagging
        ######################### */
     // If this is a custom json endpoint parse the return to get external tag
     stage("Set ENV GITHUB_TAGNAME"){
-     steps{
-       script{
-         env.EXT_RELEASE_TAGNAME = sh(
-           script: '''curl -s ${JSON_URL} | jq -r ". | ${JSON_GITHUB_TAGNAME_PATH}" ''',
-           returnStdout: true).trim()
-         env.RELEASE_LINK = env.JSON_URL
-       }
-     }
+      steps{
+        script{
+          env.EXT_RELEASE_TAGNAME = sh(
+            script: '''curl -s ${JSON_URL} | jq -r ". | ${JSON_GITHUB_TAGNAME_PATH}" ''',
+            returnStdout: true).trim()
+          env.RELEASE_LINK = env.JSON_URL
+        }
+      }
     }
     /* ########################
-       External Release Name
+      External Release Name
        ######################## */
     // If this is a custom json endpoint parse the return to get external tag
     stage("Set ENV GITHUB_NAME"){
-     steps{
-       script{
-         env.EXT_RELEASE_NAME = sh(
-           script: '''curl -s ${JSON_URL} | jq -r ". | ${JSON_GITHUB_NAME_PATH}" ''',
-           returnStdout: true).trim()
-         env.RELEASE_LINK = env.JSON_URL
-       }
-     }
+      steps{
+        script{
+          env.EXT_RELEASE_NAME = sh(
+            script: '''curl -s ${JSON_URL} | jq -r ". | ${JSON_GITHUB_NAME_PATH}" ''',
+            returnStdout: true).trim()
+          env.RELEASE_LINK = env.JSON_URL
+        }
+      }
     }
     // Sanitize the release tagname and strip illegal docker or github characters
     stage("Sanitize GITHUB_TAGNAME"){
@@ -195,75 +194,8 @@ pipeline {
         }
       }
     }
-    // Use helper containers to render templated files
-    stage('Update-Templates') {
-      when {
-        branch "development"
-        environment name: 'CHANGE_ID', value: ''
-        expression {
-          env.CONTAINER_NAME != null
-        }
-      }
-      steps {
-        sh '''#! /bin/bash
-              set -e
-              TEMPDIR=$(mktemp -d)
-              docker pull linuxserver/jenkins-builder:latest
-              docker run --rm -e CONTAINER_NAME=${CONTAINER_NAME} -e GITHUB_BRANCH=development -v ${TEMPDIR}:/ansible/jenkins linuxserver/jenkins-builder:latest 
-              CURRENTHASH=$(grep -hs ^ ${TEMPLATED_FILES} | md5 | cut -c1-8)
-              cd ${TEMPDIR}/docker-${CONTAINER_NAME}
-              NEWHASH=$(grep -hs ^ ${TEMPLATED_FILES} | md5 | cut -c1-8)
-              if [[ "${CURRENTHASH}" != "${NEWHASH}" ]]; then
-                mkdir -p ${TEMPDIR}/repo
-                git clone https://github.com/${LS_USER}/${LS_REPO}.git ${TEMPDIR}/repo/${LS_REPO}
-                cd ${TEMPDIR}/repo/${LS_REPO}
-                git checkout -f development
-                cd ${TEMPDIR}/docker-${CONTAINER_NAME}
-                mkdir -p ${TEMPDIR}/repo/${LS_REPO}/.github
-                cp --parents ${TEMPLATED_FILES} ${TEMPDIR}/repo/${LS_REPO}/
-                cd ${TEMPDIR}/repo/${LS_REPO}/
-                git add ${TEMPLATED_FILES}
-                git commit -m 'Bot Updating Templated Files'
-                git push https://gustavo8000br:${GITHUB_TOKEN}@github.com/${LS_USER}/${LS_REPO}.git --all
-                echo "true" > /tmp/${COMMIT_SHA}-${BUILD_NUMBER}
-              else
-                echo "false" > /tmp/${COMMIT_SHA}-${BUILD_NUMBER}
-              fi
-              mkdir -p ${TEMPDIR}/gitbook
-              git clone https://github.com/linuxserver/docker-documentation.git ${TEMPDIR}/gitbook/docker-documentation
-              if [[ "${BRANCH_NAME}" == "master" ]] && [[ (! -f ${TEMPDIR}/gitbook/docker-documentation/images/docker-${CONTAINER_NAME}.md) || ("$(md5 ${TEMPDIR}/gitbook/docker-documentation/images/docker-${CONTAINER_NAME}.md | awk '{ print $1 }')" != "$(md5 ${TEMPDIR}/docker-${CONTAINER_NAME}/docker-${CONTAINER_NAME}.md | awk '{ print $1 }')") ]]; then
-                cp ${TEMPDIR}/docker-${CONTAINER_NAME}/docker-${CONTAINER_NAME}.md ${TEMPDIR}/gitbook/docker-documentation/images/
-                cd ${TEMPDIR}/gitbook/docker-documentation/
-                git add images/docker-${CONTAINER_NAME}.md
-                git commit -m 'Bot Updating Documentation'
-                git push https://gustavo8000br:${GITHUB_TOKEN}@github.com/linuxserver/docker-documentation.git --all
-              fi
-              rm -Rf ${TEMPDIR}'''
-        script{
-          env.FILES_UPDATED = sh(
-            script: '''cat /tmp/${COMMIT_SHA}-${BUILD_NUMBER}''',
-            returnStdout: true).trim()
-        }
-      }
-    }
-    // Exit the build if the Templated files were just updated
-    stage('Template-exit') {
-      when {
-        branch "development"
-        environment name: 'CHANGE_ID', value: ''
-        environment name: 'FILES_UPDATED', value: 'true'
-        expression {
-          env.CONTAINER_NAME != null
-        }
-      }
-      steps {
-        script{
-          env.EXIT_STATUS = 'ABORTED'
-        }
-      }
-    }
     /* ###############
-       Build Container
+      Build Container
        ############### */
     // Build Docker container for push to LS Repo
     stage('Build-Single') {
@@ -273,7 +205,7 @@ pipeline {
       }
       steps {
         sh "docker build --no-cache --pull -t ${IMAGE}:${META_TAG} \
-        --build-arg ${BUILD_VERSION_ARG}=${EXT_RELEASE_TAGNAME} --build-arg VERSION=\"${META_TAG}\" --build-arg GITHUB_TAGNAME=${EXT_RELEASE_TAGNAME} --build-arg GITHUB_NAME=${EXT_RELEASE_NAME} --build-arg BUILD_DATE=${GITHUB_DATE} ."
+        --build-arg VERSION=\"${META_TAG}\" --build-arg GITHUB_TAGNAME=${EXT_RELEASE_TAGNAME} --build-arg GITHUB_NAME=${EXT_RELEASE_NAME} --build-arg BUILD_DATE=${GITHUB_DATE} ."
       }
     }
     // Build MultiArch Docker containers for push to LS Repo
@@ -286,7 +218,7 @@ pipeline {
         stage('Build X86') {
           steps {
             sh "docker build --no-cache --pull -t ${IMAGE}:amd64-${META_TAG} \
-            --build-arg ${BUILD_VERSION_ARG}=${EXT_RELEASE_TAGNAME} --build-arg VERSION=\"${META_TAG}\" --build-arg GITHUB_TAGNAME=${EXT_RELEASE_TAGNAME} --build-arg GITHUB_NAME=${EXT_RELEASE_NAME} --build-arg BUILD_DATE=${GITHUB_DATE} ."
+            --build-arg VERSION=\"${META_TAG}\" --build-arg GITHUB_TAGNAME=${EXT_RELEASE_TAGNAME} --build-arg GITHUB_NAME=${EXT_RELEASE_NAME} --build-arg BUILD_DATE=${GITHUB_DATE} ."
           }
         }
         stage('Build ARM64') {
@@ -304,10 +236,10 @@ pipeline {
             ]) {
               echo 'Logging into DockerHub'
               sh '''#! /bin/bash
-                 echo $DOCKERPASS | docker login -u $DOCKERUSER --password-stdin
-                 '''
+                  echo $DOCKERPASS | docker login -u $DOCKERUSER --password-stdin
+                  '''
               sh "docker build --no-cache --pull -f Dockerfile.aarch64 -t ${IMAGE}:arm64v8-${META_TAG} \
-                           --build-arg ${BUILD_VERSION_ARG}=${EXT_RELEASE_TAGNAME} --build-arg VERSION=\"${META_TAG}\" --build-arg GITHUB_TAGNAME=${EXT_RELEASE_TAGNAME} --build-arg GITHUB_NAME=${EXT_RELEASE_NAME} --build-arg BUILD_DATE=${GITHUB_DATE} ."
+                            --build-arg VERSION=\"${META_TAG}\" --build-arg GITHUB_TAGNAME=${EXT_RELEASE_TAGNAME} --build-arg GITHUB_NAME=${EXT_RELEASE_NAME} --build-arg BUILD_DATE=${GITHUB_DATE} ."
             }
           }
         }
@@ -397,7 +329,7 @@ pipeline {
       }
     }
     /* ##################
-         Release Logic
+        Release Logic
        ################## */
     // If this is an amd64 only image only push a single image
     stage('Docker-Push-Single') {
@@ -427,9 +359,9 @@ pipeline {
                 for DELETEIMAGE in "${GITHUBIMAGE}" "${IMAGE}"; do
                   docker rmi \
                   ${DELETEIMAGE}:${META_TAG} \
-                  ${DELETEIMAGE}:development
+                  ${DELETEIMAGE}:development || :
                 done
-             '''
+              '''
         }
       }
     }
@@ -478,18 +410,18 @@ pipeline {
                   docker push ${LEGACYIMAGE}:arm64v8-${META_TAG}
                   docker push ${LEGACYIMAGE}:development
                   docker push ${LEGACYIMAGE}:${META_TAG}
-                  docker push ${LEGACYIMAGE}:arm64v8-development
+                  docker push ${LEGACYIMAGE}:arm64v8-development 
                 done
-             '''
+              '''
           sh '''#! /bin/bash
                 for DELETEIMAGE in "${GITHUBIMAGE}" "${IMAGE}"; do
                   docker rmi \
                   ${DELETEIMAGE}:amd64-${META_TAG} \
                   ${DELETEIMAGE}:amd64-development \
                   ${DELETEIMAGE}:arm64v8-${META_TAG} \
-                  ${DELETEIMAGE}:arm64v8-development
+                  ${DELETEIMAGE}:arm64v8-development || :
                 done
-             '''
+              '''
         }
       }
     }
@@ -507,17 +439,17 @@ pipeline {
         echo "Pushing New tag for current commit ${EXT_RELEASE_TAGNAME_CLEAN}-ls${LS_TAG_NUMBER}"
         sh '''curl -H "Authorization: token ${GITHUB_TOKEN}" -X POST https://api.github.com/repos/${LS_USER}/${LS_REPO}/git/tags \
         -d '{"tag":"'${EXT_RELEASE_TAGNAME_CLEAN}'-ls'${LS_TAG_NUMBER}'",\
-             "object": "'${COMMIT_SHA}'",\
-             "message": "Tagging Release '${EXT_RELEASE_TAGNAME_CLEAN}'-ls'${LS_TAG_NUMBER}' to development",\
-             "type": "commit",\
-             "tagger": {"name": "Guustavo8000br Jenkins","email": "gustavo.mathias.rocha@gmail.com","date": "'${GITHUB_DATE}'"}}' '''
+              "object": "'${COMMIT_SHA}'",\
+              "message": "Tagging Release '${EXT_RELEASE_TAGNAME_CLEAN}'-ls'${LS_TAG_NUMBER}' to development",\
+              "type": "commit",\
+              "tagger": {"name": "Gustavo8000br Jenkins","email": "gustavo.mathias.rocha@gmail.com","date": "'${GITHUB_DATE}'"}}' '''
         echo "Pushing New release for Tag"
         sh '''#! /bin/bash
               echo "Data change at JSON endpoint ${JSON_URL}" > releasebody.json
               echo '{"tag_name":"'${EXT_RELEASE_TAGNAME_CLEAN}'-ls'${LS_TAG_NUMBER}'",\
-                     "target_commitish": "development",\
-                     "name": "'${EXT_RELEASE_TAGNAME_CLEAN}'-ls'${LS_TAG_NUMBER}'",\
-                     "body": "**Gustavo8000br Changes:**\\n\\n'${LS_RELEASE_NOTES}'\\n**Remote Changes:**\\n\\n' > start
+                      "target_commitish": "development",\
+                      "name": "'${EXT_RELEASE_TAGNAME_CLEAN}'-ls'${LS_TAG_NUMBER}'",\
+                      "body": "**Gustavo8000br Changes:**\\n\\n'${LS_RELEASE_NOTES}'\\n**Remote Changes:**\\n\\n' > start
               printf '","draft": false,"prerelease": true}' >> releasebody.json
               paste -d'\\0' start releasebody.json > releasebody.json.done
               curl -H "Authorization: token ${GITHUB_TOKEN}" -X POST https://api.github.com/repos/${LS_USER}/${LS_REPO}/releases -d @releasebody.json.done'''
@@ -537,7 +469,7 @@ pipeline {
     }
   }
   /* ######################
-     Send status to Discord
+    Send status to Discord
      ###################### */
   post {
     always {
@@ -547,13 +479,13 @@ pipeline {
         }
         else if (currentBuild.currentResult == "SUCCESS"){
           sh ''' curl -X POST -H "Content-Type: application/json" --data '{"avatar_url": "https://wiki.jenkins-ci.org/download/attachments/2916393/headshot.png","embeds": [{"color": 1681177,\
-                 "description": "**Build:**  '${BUILD_NUMBER}'\\n**CI Results:**  '${CI_URL}'\\n**ShellCheck Results:**  '${SHELLCHECK_URL}'\\n**Status:**  Success\\n**Job:** '${RUN_DISPLAY_URL}'\\n**Change:** '${CODE_URL}'\\n**External Release:**: '${RELEASE_LINK}'\\n**DockerHub:** '${DOCKERHUB_LINK}'\\n"}],\
-                 "username": "Jenkins"}' ${BUILDS_DISCORD} '''
+                  "description": "**Build:**  '${BUILD_NUMBER}'\\n**CI Results:**  '${CI_URL}'\\n**ShellCheck Results:**  '${SHELLCHECK_URL}'\\n**Status:**  Success\\n**Job:** '${RUN_DISPLAY_URL}'\\n**Change:** '${CODE_URL}'\\n**External Release:**: '${RELEASE_LINK}'\\n**DockerHub:** '${DOCKERHUB_LINK}'\\n"}],\
+                  "username": "Jenkins"}' ${BUILDS_DISCORD} '''
         }
         else {
           sh ''' curl -X POST -H "Content-Type: application/json" --data '{"avatar_url": "https://wiki.jenkins-ci.org/download/attachments/2916393/headshot.png","embeds": [{"color": 16711680,\
-                 "description": "**Build:**  '${BUILD_NUMBER}'\\n**CI Results:**  '${CI_URL}'\\n**ShellCheck Results:**  '${SHELLCHECK_URL}'\\n**Status:**  failure\\n**Job:** '${RUN_DISPLAY_URL}'\\n**Change:** '${CODE_URL}'\\n**External Release:**: '${RELEASE_LINK}'\\n**DockerHub:** '${DOCKERHUB_LINK}'\\n"}],\
-                 "username": "Jenkins"}' ${BUILDS_DISCORD} '''
+                  "description": "**Build:**  '${BUILD_NUMBER}'\\n**CI Results:**  '${CI_URL}'\\n**ShellCheck Results:**  '${SHELLCHECK_URL}'\\n**Status:**  failure\\n**Job:** '${RUN_DISPLAY_URL}'\\n**Change:** '${CODE_URL}'\\n**External Release:**: '${RELEASE_LINK}'\\n**DockerHub:** '${DOCKERHUB_LINK}'\\n"}],\
+                  "username": "Jenkins"}' ${BUILDS_DISCORD} '''
         }
       }
     }
