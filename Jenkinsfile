@@ -22,6 +22,7 @@ pipeline {
     PR_DOCKERHUB_IMAGE = 'gustavo8000br/code-server-pr'
     DIST_IMAGE = 'ubuntu'
     MULTIARCH='true'
+    UPDATETEMPLATES='false'
     CI='false'
     CI_WEB='true'
     CI_PORT='8443'
@@ -55,7 +56,7 @@ pipeline {
           env.LICENSE_TAG = sh(
             script: '''#!/bin/bash
                        if [ -e LICENSE ] ; then
-                         cat LICENSE | md5 | cut -c1-8
+                         cat LICENSE | md5sum | cut -c1-8
                        else
                          echo none
                        fi''',
@@ -91,7 +92,7 @@ pipeline {
           env.PACKAGE_TAG = sh(
             script: '''#!/bin/bash
                        if [ -e package_versions.txt ] ; then
-                         cat package_versions.txt | md5 | cut -c1-8
+                         cat package_versions.txt | md5sum | cut -c1-8
                        else
                          echo none
                        fi''',
@@ -151,7 +152,7 @@ pipeline {
     // If this is a dev build use dev docker endpoints
     stage("Set ENV dev build"){
       when {
-        branch "development"
+        not {branch "master"}
         environment name: 'CHANGE_ID', value: ''
       }
       steps {
@@ -190,6 +191,7 @@ pipeline {
     stage('Update-Templates') {
       when {
         branch "master"
+        environment name: 'UPDATETEMPLATES', value: 'true'
         environment name: 'CHANGE_ID', value: ''
         expression {
           env.CONTAINER_NAME != null
@@ -203,9 +205,9 @@ pipeline {
               docker run --rm -e CONTAINER_NAME=${CONTAINER_NAME} -e GITHUB_BRANCH=master -v ${TEMPDIR}:/ansible/jenkins linuxserver/jenkins-builder:latest 
               docker pull linuxserver/doc-builder:latest
               docker run --rm -e CONTAINER_NAME=${CONTAINER_NAME} -e GITHUB_BRANCH=master -v ${TEMPDIR}:/ansible/readme linuxserver/doc-builder:latest
-              if [ "$(md5 ${TEMPDIR}/${LS_REPO}/Jenkinsfile | awk '{ print $1 }')" != "$(md5 Jenkinsfile | awk '{ print $1 }')" ] || \
-                 [ "$(md5 ${TEMPDIR}/${CONTAINER_NAME}/README.md | awk '{ print $1 }')" != "$(md5 README.md | awk '{ print $1 }')" ] || \
-                 [ "$(cat ${TEMPDIR}/${LS_REPO}/LICENSE | md5 | cut -c1-8)" != "${LICENSE_TAG}" ]; then
+              if [ "$(md5sum ${TEMPDIR}/${LS_REPO}/Jenkinsfile | awk '{ print $1 }')" != "$(md5sum Jenkinsfile | awk '{ print $1 }')" ] || \
+                 [ "$(md5sum ${TEMPDIR}/${CONTAINER_NAME}/README.md | awk '{ print $1 }')" != "$(md5sum README.md | awk '{ print $1 }')" ] || \
+                 [ "$(cat ${TEMPDIR}/${LS_REPO}/LICENSE | md5sum | cut -c1-8)" != "${LICENSE_TAG}" ]; then
                 mkdir -p ${TEMPDIR}/repo
                 git clone https://github.com/${LS_USER}/${LS_REPO}.git ${TEMPDIR}/repo/${LS_REPO}
                 git --git-dir ${TEMPDIR}/repo/${LS_REPO}/.git checkout -f master
@@ -222,7 +224,7 @@ pipeline {
               fi
               mkdir -p ${TEMPDIR}/gitbook
               git clone https://github.com/gustavo8000br/docker-documentation.git ${TEMPDIR}/gitbook/docker-documentation
-              if [[ "${BRANCH_NAME}" == "master" ]] && [[ (! -f ${TEMPDIR}/gitbook/docker-documentation/images/docker-${CONTAINER_NAME}.md) || ("$(md5 ${TEMPDIR}/gitbook/docker-documentation/images/docker-${CONTAINER_NAME}.md | awk '{ print $1 }')" != "$(md5 ${TEMPDIR}/${CONTAINER_NAME}/docker-${CONTAINER_NAME}.md | awk '{ print $1 }')") ]]; then
+              if [[ "${BRANCH_NAME}" == "master" ]] && [[ (! -f ${TEMPDIR}/gitbook/docker-documentation/images/docker-${CONTAINER_NAME}.md) || ("$(md5sum ${TEMPDIR}/gitbook/docker-documentation/images/docker-${CONTAINER_NAME}.md | awk '{ print $1 }')" != "$(md5sum ${TEMPDIR}/${CONTAINER_NAME}/docker-${CONTAINER_NAME}.md | awk '{ print $1 }')") ]]; then
                 cp ${TEMPDIR}/${CONTAINER_NAME}/docker-${CONTAINER_NAME}.md ${TEMPDIR}/gitbook/docker-documentation/images/
                 cd ${TEMPDIR}/gitbook/docker-documentation/
                 git add images/docker-${CONTAINER_NAME}.md
@@ -363,7 +365,7 @@ pipeline {
                   sort -o /tmp/package_versions.txt  /tmp/package_versions.txt && \
                   chmod 777 /tmp/package_versions.txt'
               fi
-              NEW_PACKAGE_TAG=$(md5 ${TEMPDIR}/package_versions.txt | cut -c1-8 )
+              NEW_PACKAGE_TAG=$(md5sum ${TEMPDIR}/package_versions.txt | cut -c1-8 )
               echo "Package tag sha from current packages in buit container is ${NEW_PACKAGE_TAG} comparing to old ${PACKAGE_TAG} from github"
               if [ "${NEW_PACKAGE_TAG}" != "${PACKAGE_TAG}" ]; then
                 git clone https://github.com/${LS_USER}/${LS_REPO}.git ${TEMPDIR}/${LS_REPO}

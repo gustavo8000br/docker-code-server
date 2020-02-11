@@ -19,6 +19,7 @@ repo_vars:
   - PR_DOCKERHUB_IMAGE = 'gustavo8000br/code-server-pr'
   - DIST_IMAGE = 'ubuntu'
   - MULTIARCH='true'
+  - UPDATETEMPLATES='false'
   - CI='false'
   - CI_WEB='true'
   - CI_PORT='8443'
