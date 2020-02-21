@@ -2,10 +2,6 @@ pipeline {
   agent {
     label 'X86-64-MULTI'
   }
-  // Input to determine if this is a package check
-  parameters {
-     string(defaultValue: 'false', description: 'package check run', name: 'PACKAGE_CHECK')
-  }
   // Configuration for the variables used for this specific repo
   environment {
     BUILDS_DISCORD=credentials('build_webhook_url')
